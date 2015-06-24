@@ -5,6 +5,18 @@ The main program main.py requires
 libtcod-1.5.1. which can be freely downloaded at:
 http://doryen.eptalys.net/libtcod/download/
 
+# Features
+* Displays information about a SS13 server without needing to log into it.
+ * Shows the number of players and admins on.
+ * Shows the public gamemode (IE if it's secret, it displays secret, not the 'real' gamemode).
+ * Shows the server's "version" (IE if it's using baycode or not)
+ * (Bay/Goon only) Can list all ckeys online on that server.
+* Friends list.
+ * If the server supports it, highlights ckeys inside the player list green if they are on your friends list in the program.
+* Auto-syncs to the current server every ten minutes.
+* Guesses what time it is on the server in almost-real time.
+* One button launch Dreemseeker and connect to the server.
+
 # Using
 The utility is able to support servers using all major codebases (Baycode, /tg/ code, even gooncode surprisingly).
 Features may be missing if using the program that isn't using baycode.
