@@ -12,6 +12,7 @@ import shelve
 import webbrowser
 import platform
 import sound
+import threading
 
 try: #This won't work on linux/osx/anything else
 	import balloontip
@@ -38,6 +39,8 @@ STATUS_WIDTH = SCREEN_WIDTH
 PLAYER_WIDTH = 16
 
 LIMIT_FPS = 20  #20 frames-per-second maximum
+
+AUTOSYNC_OPTIONS = [5, 10, 20, 30, 60, 120] #minutes
 
 player_pos = 6
 
@@ -86,7 +89,7 @@ class Server_Data():
 			while len(resp) != length:
 				resp += sock.recv(length - len(resp)).decode('ascii')
 			
-			#print resp
+			print resp
 			resp = str(resp)
 			if msg == 'status':
 				self.status = urlparse.parse_qs(resp, keep_blank_values=False, strict_parsing=False)
@@ -111,7 +114,7 @@ class Server_Data():
 		return "hi"
 	
 	def ping(self):
-		return bool(self.Export('ping'))
+		return bool(self.Export_threaded('ping'))
 	
 	def update_vars(self):
 		status = self.status
@@ -163,6 +166,10 @@ class Server_Data():
 			print 'Failed to retrieve list of players.'
 			message('Server failed to supply a list of players.  Friends list checking will be disabled.',libtcod.orange)
 		message('Data synchronized with the server.',libtcod.grey)
+	
+	def Export_threaded(self, msg, get_reply = True):
+		t = threading.Thread(target=self.Export,args=[msg, get_reply])
+		t.start()
 	
 	def update_seen_friends(self):
 		User.most_recent_friends = []
@@ -238,9 +245,15 @@ class Server_Data():
 class User_Data():
 	#Holds config options and other client-related stuff.
 	name = "User"
-	default_server = None
 	friend_notify = True
-	server_list = []
+	autosync_frequency = 10 #minutes
+	autosync_index = 1
+	server_dict = 	{
+					'Baystation12' : 'baystation12.net:8000',
+					'/TG/Station13 1' : 'game.tgstation13.org:1337',
+					'/TG/Station13 2' : 'game.tgstation13.org:2337'
+					}
+	current_server_dict_index = 0
 	friends_list = []
 	seen_friends = []
 	most_recent_friends = []
@@ -294,9 +307,9 @@ class Timer():
 	def interpolate_time(self):
 		if self.tick_total % (20) == 0: #one second
 			Server.count_time() #Make the estimated game time tick.
-		if self.tick_total % (12000) == 0: #ten minutes
+		if self.tick_total % (User.autosync_frequency * 1200) == 0: #ten minutes by default
 			libtcod.console_clear(con)
-			Server.Export('status',True) #Resync with the server
+			Server.Export_threaded('status',True) #Resync with the server
 
 def text_input():
 	timer = 0
@@ -512,16 +525,15 @@ def render_all():
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 1, libtcod.BKGND_NONE, libtcod.RIGHT, 'Game Time: ' + str(Server.time))
 	else:
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 1, libtcod.BKGND_NONE, libtcod.RIGHT, 'Game Time: ??:??:?? ??')
-	libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 2, libtcod.BKGND_NONE, libtcod.RIGHT, 'Auto-sync interval: 10m')
+	if User.autosync_frequency % 60 == 0: #So we can display hours instead of minutes.
+		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 2, libtcod.BKGND_NONE, libtcod.RIGHT, 'Auto-sync interval: ' + str(User.autosync_frequency // 60) + 'h')
+	else:
+		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 2, libtcod.BKGND_NONE, libtcod.RIGHT, 'Auto-sync interval: ' + str(User.autosync_frequency) + 'm')
 	
 	if User.friend_notify is True:
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 3, libtcod.BKGND_NONE, libtcod.RIGHT, 'Notify on friend log-in: On')
 	else:
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 3, libtcod.BKGND_NONE, libtcod.RIGHT, 'Notify on friend log-in: Off')
-	
-	libtcod.console_print_ex(status, SCREEN_WIDTH / 5, 5, libtcod.BKGND_NONE, libtcod.CENTER, '--Players--')
-	libtcod.console_print_ex(status, SCREEN_WIDTH - SCREEN_WIDTH / 2, 5, libtcod.BKGND_NONE, libtcod.CENTER, '--Players--')
-	libtcod.console_print_ex(status, SCREEN_WIDTH - SCREEN_WIDTH / 5, 5, libtcod.BKGND_NONE, libtcod.CENTER, '--Friends--')
 	
 	libtcod.console_set_default_background(log, libtcod.black)
 	
@@ -540,7 +552,7 @@ def handle_keys():
 	elif key.vk == libtcod.KEY_ENTER:
 		if Server.failed_sync == True:
 			message('Attempting to query ' + Server.address + ':' + str(Server.port) +  ' . . .', libtcod.white)
-			Server.Export('status',True)
+			Server.Export_threaded('status',True)
 		else:
 			message('You are already connected to a server.  If you want to see another server\'s stats, you must disconnect first.', libtcod.white)
 	
@@ -558,7 +570,7 @@ def handle_keys():
 			return
 		message('Manually querying ' + str(Server.address) + ':' + str(Server.port) + '.', libtcod.white)
 		libtcod.console_clear(con)
-		Server.Export('status',True) #Resync with the server
+		Server.Export_threaded('status',True) #Resync with the server
 
 	elif key.vk == libtcod.KEY_DOWN:
 		if player_pos <= 5:
@@ -575,7 +587,7 @@ def handle_keys():
 		key_char = chr(key.c)
 		if key_char == '?':
 			#message('Press [Enter] to connect to the selected server.  Press [D] to disconnect from the server.  Press [Space] to do a manual query.  Press [F] to add a ckey to your friends list.  Press [G] to launch Dreamseeker and connect to the server you\'re monitoring.  Press [1] to enter a new target IP.  Press [2] to enter a new target port number.  Press [N] to choose a new username.  Press [P] to toggle friend notifications.  Press [UP] or [DOWN] to scroll, or use the [Scrollwheel].  Press [Esc] to quit the application.',libtcod.cyan)
-			message('Connecting: Press [Enter] to connect to the selected server.  Press [D] to disconnect from the server. Press [Space] to do a manual query.  Press [G] to launch Dreamseeker and connect to the server you\'re monitoring.  Press [Esc] to quit the application.',libtcod.cyan, False)
+			message('Connecting: Press [Enter] to connect to the selected server.  Press [D] to disconnect from the server. Press [Space] to do a manual query.  Press [+] or [-] to adjust the autosync frequency.  Press [G] to launch Dreamseeker and connect to the server you\'re monitoring.  Press [Esc] to quit the application.',libtcod.cyan, False)
 			message('Friends: Press [F] to add a ckey to your friends list.  Press [R] to remove a ckey from your friends list.  Press [P] to toggle friend notifications.  Press [N] to choose a new username.',libtcod.green, False)
 			message('Navigation: Press [UP] or [DOWN], or use the [Scrollwheel] to scroll.',libtcod.white, False)
 		
@@ -619,14 +631,7 @@ def handle_keys():
 				url = "byond://" + str(Server.address) + ":" + str(Server.port)
 				webbrowser.open(url)
 			except:
-				message('Could not launch Dreemseeker.',libtcod.red)
-		'''
-		if key_char == '`':
-			balloon_tip('hurr','durr')
-		'''
-		if key_char == '0':
-			#User.notify_friends()
-			Server.update_seen_friends()
+				message('Could not launch Dreemseeker.',libtcod.red)	
 		
 		if key_char == 'p':
 			User.friend_notify = not User.friend_notify
@@ -634,6 +639,21 @@ def handle_keys():
 				message('You will now be notified if a friend is seen.')
 			else:
 				message('You will no longer be notified if a friend is seen.')
+		
+		if key_char == '+':
+			if User.autosync_index != len(AUTOSYNC_OPTIONS) - 1: #Prevent out of bound errors.
+				User.autosync_index += 1
+				User.autosync_frequency = AUTOSYNC_OPTIONS[User.autosync_index]
+			else:
+				message('Autosync cannot go any higher than ' + str(AUTOSYNC_OPTIONS[User.autosync_index]) + ' minutes.')
+
+		if key_char == '-':
+			if User.autosync_index != 0: #Prevent out of bound errors.
+				User.autosync_index -= 1
+				User.autosync_frequency = AUTOSYNC_OPTIONS[User.autosync_index]
+			else:
+				message('Autosync cannot go any lower than ' + str(AUTOSYNC_OPTIONS[User.autosync_index]) + ' minutes.')
+			
 			
 
 def balloon_tip(title='Beep', msg='Boop'):
@@ -650,16 +670,22 @@ def save_config():
 	file['user'] = User
 	file['friends_list'] = User.friends_list
 	file['friend_notify'] = User.friend_notify
+	file['server'] = Server
+	file['address'] = Server.address
+	file['port'] = Server.port
 	file.close()
 
 def load_config():
 	#open the previously saved shelve and load the config data
-	global User
+	global User, Server
 
 	file = shelve.open('config', 'r')
 	User = file['user']
 	User.friends_list = file['friends_list']
 	User.friend_notify = file['friend_notify']
+	Server = file['server']
+	Server.address = file['address']
+	Server.port = file['port']
 	file.close()
 
 	message('Welcome back, '+ User.name + '!', libtcod.green)
@@ -690,6 +716,7 @@ def start():
 			libtcod.console_clear(con)
 		
 		if player_action == 'exit':
+			Server.disconnect()
 			save_config()
 			break
 
