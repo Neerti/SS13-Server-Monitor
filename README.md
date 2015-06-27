@@ -13,12 +13,12 @@ http://doryen.eptalys.net/libtcod/download/
  * (Bay/Goon only) Can list all ckeys online on that server.
 * Friends list.
  * If the server supports it, highlights ckeys inside the player list green if they are on your friends list in the program.
+ * Friend notification when a friend logs in.
 * Auto-syncs to the current server every ten minutes.
 * Guesses what time it is on the server in almost-real time.
 * One button launch Dreemseeker and connect to the server.
  
 # Roadmap
-* Friend notification when a friend logs in.
 * Ability to config auto-sync frequency.
 * Ability to save a default server.
 * Ability to hold a list of servers.
