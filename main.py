@@ -20,7 +20,7 @@ except:
 	print 'Failed to import'
 
 #actual size of the window
-SCREEN_WIDTH = 80 
+SCREEN_WIDTH = 80
 SCREEN_HEIGHT = 30
 
 CON_HEIGHT = SCREEN_HEIGHT
@@ -28,7 +28,7 @@ CON_WIDTH = SCREEN_WIDTH
 
 LOG_HEIGHT = 20
 LOG_WIDTH = SCREEN_WIDTH
-LOG_Y = SCREEN_HEIGHT - LOG_HEIGHT 
+LOG_Y = SCREEN_HEIGHT - LOG_HEIGHT
 MSG_X = 1
 MSG_WIDTH = LOG_WIDTH - 2
 MSG_HEIGHT = LOG_Y - 2
@@ -64,7 +64,7 @@ class Server_Data():
 	failed_sync = True
 	reconnect_attempts = 3
 	last_queried = 0
-	
+
 	#Mloc's server method/function/whatever python calls it
 	def Export(self, msg, get_reply = True):
 		try:
@@ -88,7 +88,7 @@ class Server_Data():
 			resp = ""
 			while len(resp) != length:
 				resp += sock.recv(length - len(resp)).decode('ascii')
-			
+
 			print resp
 			resp = str(resp)
 			if msg == 'status':
@@ -96,8 +96,8 @@ class Server_Data():
 				#print self.status
 				self.update_vars()
 			self.failed_sync = False
-			
-			
+
+
 
 			sock.close()
 
@@ -112,10 +112,10 @@ class Server_Data():
 			return ret
 
 		return "hi"
-	
+
 	def ping(self):
 		return bool(self.Export_threaded('ping'))
-	
+
 	def update_vars(self):
 		status = self.status
 		#Different codebases are willing to give us certain information.  A lot of try/except statements should allow maximum server compatibility.
@@ -123,12 +123,12 @@ class Server_Data():
 			self.name = str(status['version'][0])
 		except:
 			message('Server failed to supply the game version.',libtcod.orange)
-		
+
 		try:
 			self.players_num = int(status['players'][0])
 		except:
 			message('Server failed to supply the number of players.',libtcod.orange)
-			
+
 		try:
 			unfixed_admins_num = str(status['admins'][0])
 			self.admins_num = int(unfixed_admins_num[:1]) #for some reason we get something like 4/x00 for four admins, so this works around this.
@@ -137,7 +137,7 @@ class Server_Data():
 
 		try:
 			self.gamemode = str(status['mode'][0].title())
-		except: 
+		except:
 			message('Server failed to supply the gamemode.',libtcod.orange)
 
 		try: #/TG/ servers do not provide the station time or a list of players.
@@ -148,8 +148,8 @@ class Server_Data():
 		except:
 			print 'Failed to get server time.'
 			message('Server failed to supply the station time.  The station time is inaccurate.',libtcod.orange)
-	
-		try:	
+
+		try:
 			times_to_iterate = int(self.players_num)
 			iterated = 0
 			target = 'player' + str(iterated)
@@ -160,17 +160,18 @@ class Server_Data():
 				self.players.append(player)
 				iterated += 1
 				target = 'player' + str(iterated)
-			
+
 			self.update_seen_friends()
 		except:
 			print 'Failed to retrieve list of players.'
 			message('Server failed to supply a list of players.  Friends list checking will be disabled.',libtcod.orange)
+		libtcod.console_clear(con)
 		message('Data synchronized with the server.',libtcod.grey)
-	
+
 	def Export_threaded(self, msg, get_reply = True):
 		t = threading.Thread(target=self.Export,args=[msg, get_reply])
 		t.start()
-	
+
 	def update_seen_friends(self):
 		User.most_recent_friends = []
 		#First, we add people we just saw.
@@ -184,14 +185,14 @@ class Server_Data():
 			if friend not in self.players:
 				User.seen_friends.remove(friend)
 		User.notify_friends()
-		
-	
+
+
 	def count_time(self):
 		#Asking the server for what time it is every second will get costly, annoying, and slow, so instead we count locally and resync every time we query the server.
 		second_str = ""
 		minute_str = ""
 		hour_str = ""
-		
+
 		self.second += 1
 		if self.second >= 60:
 			self.minute += 1
@@ -203,31 +204,31 @@ class Server_Data():
 				self.is_PM = not self.is_PM
 		if self.hour >= 13:
 			self.hour = 1
-			
-		
+
+
 		#Now to add zeros for padding, if needed.
 		second_str = str(self.second)
 		minute_str = str(self.minute)
 		hour_str = str(self.hour)
-		
+
 		if self.second <= 9:
 			second_str = '0' + str(self.second)
 		if self.minute <= 9:
 			minute_str = '0' + str(self.minute)
 		if self.hour <= 9:
 			hour_str = '0' + str(self.hour)
-		
+
 		if self.is_PM is True:
 			AM_PM_str = 'PM'
 		else:
 			AM_PM_str = 'AM'
-			
+
 		#I don't expect rounds to literally last days, so we don't need to count higher.
 		self.time = str(hour_str) + ':' + str(minute_str) + ':' + str(second_str) + ' ' + str(AM_PM_str)
-	
+
 	def reload_address(self):
 		self.server = self.address,self.port
-	
+
 	def disconnect(self):
 		self.failed_sync = True
 		self.disconnect_attempts = 3
@@ -236,7 +237,7 @@ class Server_Data():
 		self.players = []
 		self.admins = []
 		message('Disconnected from ' + self.address + ':' + str(self.port) + '.')
-	
+
 	def is_player_online(self, ckey):
 		if ckey in self.players:
 			return True
@@ -257,33 +258,27 @@ class User_Data():
 	friends_list = []
 	seen_friends = []
 	most_recent_friends = []
-	
+
 	def is_friend(self, ckey):
 		if ckey in self.friends_list:
 			return True
 		return False
-	
+
 	def add_friend(self, ckey):
 		if ckey:
-			if ckey in self.friends_list:
+			if self.is_friend(ckey):
 				message(ckey + ' is already on your friends list.')
 			else:
 				self.friends_list.append(ckey)
 				message(ckey + ' was added to your friends list.')
 
 	def remove_friend(self, ckey):
-		if ckey in self.friends_list:
+		if self.is_friend(ckey):
 			self.friends_list.remove(ckey)
 			message(ckey + ' was removed from your friends list.')
 		else:
 			message(ckey + ' was not on your friends list to begin with.')
-	
-	def saw_friend(self, ckey):
-		if is_friend(ckey):
-			if ckey not in self.seen_friends:
-				self.seen_friends.append(ckey)
-				message(ckey + ' is online!',libtcod.green)
-	
+
 	def notify_friends(self):
 		if self.friend_notify is False: #Don't annoy the user if they don't want to see/hear the notifications.
 			return
@@ -308,7 +303,6 @@ class Timer():
 		if self.tick_total % (20) == 0: #one second
 			Server.count_time() #Make the estimated game time tick.
 		if self.tick_total % (User.autosync_frequency * 1200) == 0: #ten minutes by default
-			libtcod.console_clear(con)
 			Server.Export_threaded('status',True) #Resync with the server
 
 def text_input():
@@ -322,7 +316,7 @@ def text_input():
 	while not libtcod.console_is_window_closed():
 
 		key = libtcod.console_check_for_keypress(libtcod.KEY_PRESSED)
-		
+
 		timer += 1
 		if timer % (LIMIT_FPS // 4) == 0:
 			if timer % (LIMIT_FPS // 2) == 0:
@@ -332,7 +326,7 @@ def text_input():
 			else:
 				libtcod.console_set_char(0, window_x+x,  window_y, " ")
 				libtcod.console_set_char_foreground(0, window_x+x, window_y, libtcod.white)
-		
+
 		if key.vk == libtcod.KEY_BACKSPACE and x > 0:
 			libtcod.console_set_char(0, window_x+x,  window_y, " ")
 			libtcod.console_set_char_foreground(0, window_x+x, window_y, libtcod.white)
@@ -354,7 +348,7 @@ def text_input():
 
 	libtcod.console_clear(0)
 	return command
-	
+
 
 def message(new_msg, color = libtcod.white, timestamp = True, append = True, ):
 	if timestamp is True:
@@ -376,7 +370,7 @@ def message(new_msg, color = libtcod.white, timestamp = True, append = True, ):
 				if color == libtcod.white and new_msg[1] is not color:
 					color = new_msg[1]
 				new_msg = new_msg[0]
-				
+
 				messages.append( (new_msg + '  ' + line, color) )
 			else: #We have an empty list
 				messages.append( (line, color) )
@@ -385,9 +379,9 @@ def render_all():
 	global player_pos
 	y = player_pos
 	f_y = player_pos
-	
+
 	P = Server.players[:]
-	
+
 	first_column_x = 10
 	second_column_x = 25
 	third_column_x = 40
@@ -396,15 +390,15 @@ def render_all():
 	x = first_column_x
 	switched_to_second_column = False
 	switched_to_third_column = False
-	
+
 	line = Server.players
 	n = amount_per_column
 	columns_list = [line[i:i+n] for i in range(0, len(line), n)]
 	#print columns_list
-	
+
 	every_other = False
 
-	
+
 	for player in Server.players:
 		#The ckey is colored different depending on if they're on the user's friends list or not.
 		color = libtcod.white
@@ -415,9 +409,9 @@ def render_all():
 			color = libtcod.green
 		if User.name == player: #Give an ego boost if the player's on the server
 			color = libtcod.cyan
-		
+
 		libtcod.console_set_default_foreground(con, color)
-		
+
 		#We want the player list to be split into two columns if possible.
 		if player in columns_list[0]:
 			x = first_column_x
@@ -431,7 +425,7 @@ def render_all():
 			if switched_to_third_column is False:
 				y = player_pos
 				switched_to_third_column = True
-		
+
 		#split the message if necessary, among multiple lines.  Some ckeys are stupid long.
 		new_lines = textwrap.wrap(player, PLAYER_WIDTH)
 		for line in new_lines:
@@ -440,14 +434,14 @@ def render_all():
 			y += 1
 		size_of_column += 1
 	size_of_columns = 0
-	
+
 	for friend in User.friends_list:
 		color = libtcod.grey
 		if Server.is_player_online(friend): #If the user's friend is online, highlight them in green.
 			color = libtcod.green
-		
+
 		libtcod.console_set_default_foreground(con, color)
-		
+
 		new_lines = textwrap.wrap(friend, PLAYER_WIDTH)
 		for line in new_lines:
 			#Now we display the ckey, wrapping around multiple lines if needed.
@@ -456,10 +450,10 @@ def render_all():
 
 	#Make some boxes around the GUI
 	libtcod.console_set_default_foreground(con, libtcod.white)
-	
+
 	libtcod.console_print_frame(con, 50, 5, CON_WIDTH - 50 , CON_HEIGHT - 15, False, libtcod.BKGND_NONE, 'Friends')
 	libtcod.console_print_frame(con, 0, 5, CON_WIDTH - 30, CON_HEIGHT // 2, False, libtcod.BKGND_NONE, 'Player List')
-	
+
 	#blit the contents of "con" to the root console
 	libtcod.console_blit(con, 0, 0, CON_WIDTH, CON_HEIGHT, 0, 0, 0)
 
@@ -467,7 +461,7 @@ def render_all():
 	libtcod.console_set_default_background(status, libtcod.black)
 	libtcod.console_clear(status)
 	libtcod.console_clear(log)
-	
+
 	#print the game messages, one line at a time
 	libtcod.console_set_default_foreground(log, libtcod.white)
 	libtcod.console_print_frame(log, 0, 0, LOG_WIDTH , LOG_HEIGHT // 2, False, libtcod.BKGND_NONE, 'Log')
@@ -476,9 +470,9 @@ def render_all():
 		libtcod.console_set_default_foreground(log, color)
 		libtcod.console_print_ex(log, MSG_X, y, libtcod.BKGND_NONE, libtcod.LEFT, line)
 		y += 1
-	
+
 	libtcod.console_print_ex(status, 0, 0, libtcod.BKGND_NONE, libtcod.LEFT, 'Server Address: ' + Server.address + ':' + str(Server.port))
-	
+
 	libtcod.console_print_ex(status, 0, 1, libtcod.BKGND_NONE, libtcod.LEFT, 'Version: ')
 	if Server.failed_sync is False:
 		libtcod.console_set_default_foreground(status, libtcod.white)
@@ -487,7 +481,7 @@ def render_all():
 		libtcod.console_set_default_foreground(status, libtcod.red)
 		libtcod.console_print_ex(status, 9, 1, libtcod.BKGND_NONE, libtcod.LEFT, 'UNKNOWN')
 	libtcod.console_set_default_foreground(status, libtcod.white)
-	
+
 	libtcod.console_print_ex(status, 0, 2, libtcod.BKGND_NONE, libtcod.LEFT, 'Players: ')
 	if Server.players_num == 0:
 		libtcod.console_set_default_foreground(status, libtcod.red)
@@ -495,7 +489,7 @@ def render_all():
 		libtcod.console_set_default_foreground(status, libtcod.white)
 	libtcod.console_print_ex(status, 9, 2, libtcod.BKGND_NONE, libtcod.LEFT, str(Server.players_num))
 	libtcod.console_set_default_foreground(status, libtcod.white)
-	
+
 	libtcod.console_print_ex(status, 20, 2, libtcod.BKGND_NONE, libtcod.LEFT, 'Admins: ')
 	if Server.admins_num == 0:
 		libtcod.console_set_default_foreground(status, libtcod.red)
@@ -529,17 +523,17 @@ def render_all():
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 2, libtcod.BKGND_NONE, libtcod.RIGHT, 'Auto-sync interval: ' + str(User.autosync_frequency // 60) + 'h')
 	else:
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 2, libtcod.BKGND_NONE, libtcod.RIGHT, 'Auto-sync interval: ' + str(User.autosync_frequency) + 'm')
-	
+
 	if User.friend_notify is True:
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 3, libtcod.BKGND_NONE, libtcod.RIGHT, 'Notify on friend log-in: On')
 	else:
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 3, libtcod.BKGND_NONE, libtcod.RIGHT, 'Notify on friend log-in: Off')
-	
+
 	libtcod.console_set_default_background(log, libtcod.black)
-	
+
 	#blit the contents of "status" to the root console
 	libtcod.console_blit(status, 0, 0, STATUS_WIDTH, STATUS_HEIGHT, 0, 0, 0)
-	
+
 	#blit the contents of "log" to the root console
 	libtcod.console_blit(log, 0, 0, LOG_WIDTH, LOG_HEIGHT, 0, 0, SCREEN_HEIGHT - LOG_Y)
 
@@ -548,14 +542,14 @@ def handle_keys():
 
 	if key.vk == libtcod.KEY_ESCAPE:
 		return 'exit'  #exit game
-		
+
 	elif key.vk == libtcod.KEY_ENTER:
 		if Server.failed_sync == True:
 			message('Attempting to query ' + Server.address + ':' + str(Server.port) +  ' . . .', libtcod.white)
 			Server.Export_threaded('status',True)
 		else:
 			message('You are already connected to a server.  If you want to see another server\'s stats, you must disconnect first.', libtcod.white)
-	
+
 	elif key.vk == libtcod.KEY_SPACE:
 		'''
 		print 'Last queried: ' + str(Server.last_queried)
@@ -569,19 +563,18 @@ def handle_keys():
 			message('You already queried the server less then a minute ago, be patient!')
 			return
 		message('Manually querying ' + str(Server.address) + ':' + str(Server.port) + '.', libtcod.white)
-		libtcod.console_clear(con)
 		Server.Export_threaded('status',True) #Resync with the server
 
-	elif key.vk == libtcod.KEY_DOWN:
+	elif key.vk == libtcod.KEY_UP:
 		if player_pos <= 5:
 			player_pos += 1
 		libtcod.console_clear(con)
 
-	elif key.vk == libtcod.KEY_UP:
+	elif key.vk == libtcod.KEY_DOWN:
 		player_pos -= 1
 		libtcod.console_clear(con)
-		
-	
+
+
 	else:
 		#test for other keys
 		key_char = chr(key.c)
@@ -590,7 +583,7 @@ def handle_keys():
 			message('Connecting: Press [Enter] to connect to the selected server.  Press [D] to disconnect from the server. Press [Space] to do a manual query.  Press [+] or [-] to adjust the autosync frequency.  Press [G] to launch Dreamseeker and connect to the server you\'re monitoring.  Press [Esc] to quit the application.',libtcod.cyan, False)
 			message('Friends: Press [F] to add a ckey to your friends list.  Press [R] to remove a ckey from your friends list.  Press [P] to toggle friend notifications.  Press [N] to choose a new username.',libtcod.green, False)
 			message('Navigation: Press [UP] or [DOWN], or use the [Scrollwheel] to scroll.',libtcod.white, False)
-		
+
 		if key_char == '1':
 			if Server.failed_sync is False:
 				message('Disconnect from the server first.  You can do so by pressing [D].')
@@ -607,14 +600,15 @@ def handle_keys():
 				Server.reload_address()
 			except:
 				message('Ports can only consist of numbers.  Please try again.')
-		
+
 		if key_char == 'd':
 			Server.disconnect()
 			libtcod.console_clear(con)
-		
+
 		if key_char == 'n':
 			User.name = text_input()
-	
+			message('Your new name is '+ User.name + '.')
+
 		if key_char == 'f':
 			friend = text_input()
 			User.add_friend(friend)
@@ -624,22 +618,22 @@ def handle_keys():
 			ex_friend = text_input()
 			User.remove_friend(ex_friend)
 			save_config()
-		
+
 		if key_char == 'g':
 			message('Attempting to launch Dreemseeker and connect to the server.')
 			try:
 				url = "byond://" + str(Server.address) + ":" + str(Server.port)
 				webbrowser.open(url)
 			except:
-				message('Could not launch Dreemseeker.',libtcod.red)	
-		
+				message('Could not launch Dreemseeker.',libtcod.red)
+
 		if key_char == 'p':
 			User.friend_notify = not User.friend_notify
 			if User.friend_notify:
 				message('You will now be notified if a friend is seen.')
 			else:
 				message('You will no longer be notified if a friend is seen.')
-		
+
 		if key_char == '+':
 			if User.autosync_index != len(AUTOSYNC_OPTIONS) - 1: #Prevent out of bound errors.
 				User.autosync_index += 1
@@ -653,8 +647,8 @@ def handle_keys():
 				User.autosync_frequency = AUTOSYNC_OPTIONS[User.autosync_index]
 			else:
 				message('Autosync cannot go any lower than ' + str(AUTOSYNC_OPTIONS[User.autosync_index]) + ' minutes.')
-			
-			
+
+
 
 def balloon_tip(title='Beep', msg='Boop'):
 	my_os = platform.system()
@@ -698,14 +692,14 @@ def start():
 		libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS|libtcod.EVENT_MOUSE,key,mouse)
 		render_all()
 		Time.tick()
-		
+
 		libtcod.console_flush()
 
-	
+
 		#handle keys and exit if needed
-		
+
 		player_action = handle_keys()
-		
+
 		if mouse.wheel_up:
 			if player_pos <= 5:
 				player_pos += 1
@@ -714,7 +708,7 @@ def start():
 		elif mouse.wheel_down:
 			player_pos -= 1
 			libtcod.console_clear(con)
-		
+
 		if player_action == 'exit':
 			Server.disconnect()
 			save_config()
