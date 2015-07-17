@@ -62,11 +62,14 @@ class Server_Data():
 	second = 0
 	is_PM = True
 	failed_sync = True
+	reconnect = True
 	reconnect_attempts = 3
 	last_queried = 0
+	alerted_end_of_round = False
 
 	#Mloc's server method/function/whatever python calls it
 	def Export(self, msg, get_reply = True):
+		self.reconnect = True
 		try:
 			sock = socket.create_connection(self.server)
 			#message('Server replied to query.',libtcod.green)
@@ -74,7 +77,7 @@ class Server_Data():
 			print str(e)
 			message('Failed to connect.',libtcod.red)
 			message(e, libtcod.red)
-			failed_sync = True
+			self.failed_sync = True
 			return None
 
 		sock.sendall(struct.pack('!xcH5x{}sx'.format(len(msg) + 1), b'\x83', len(msg) + 7, ('?' + msg)))
@@ -93,7 +96,7 @@ class Server_Data():
 			resp = str(resp)
 			if msg == 'status':
 				self.status = urlparse.parse_qs(resp, keep_blank_values=False, strict_parsing=False)
-				#print self.status
+				print self.status
 				self.update_vars()
 			self.failed_sync = False
 
@@ -142,12 +145,35 @@ class Server_Data():
 
 		try: #/TG/ servers do not provide the station time or a list of players.
 			station_time = str(status['stationtime'][0])
-			station_time = station_time.split(":")
-			self.hour = int(station_time[0])
-			self.minute = int(station_time[1])
+			station_time = station_time.split(":") #Split the string into hours and minutes.
+
+			unconverted_hour = int(station_time[0]) #The server gives us the hour in 24 hour format.  We need to convert it to 12 hours.
+			old_hour = self.hour
+			if unconverted_hour >= 13:
+				self.hour = unconverted_hour - 12
+				print 'Time converted'
+			else:
+				self.hour = unconverted_hour
+				print 'Time not converted'
+			self.minute = int(station_time[1]) #No nonsense needed for minutes.
+
+			#Now we try to guess if a new round started or not.
+			if self.hour == 12: #This is so we can simply check using less than, instead of converting to 24 h and back to 12 h.
+				new_round_hour = 0
+			else:
+				new_round_hour = self.hour
+
+			if old_hour == 12:
+				old_hour = 0
+
+			if new_round_hour < old_hour: #If this is true, it's likely that a new round started between syncs.
+				print 'New round assumed to be true.'
+				#message('A new round has started.',libtcod.cyan)
+				User.notify_new_round()
+				Server.alerted_end_of_round = False
 		except:
 			print 'Failed to get server time.'
-			message('Server failed to supply the station time.  The station time is inaccurate.',libtcod.orange)
+			message('Server failed to supply the station time.  The station time is inaccurate, and notifications for the end of round will not work.',libtcod.orange)
 
 		try:
 			times_to_iterate = int(self.players_num)
@@ -236,6 +262,7 @@ class Server_Data():
 		self.admins_num = 0
 		self.players = []
 		self.admins = []
+		self.reconnect = False
 		message('Disconnected from ' + self.address + ':' + str(self.port) + '.')
 
 	def is_player_online(self, ckey):
@@ -247,6 +274,7 @@ class User_Data():
 	#Holds config options and other client-related stuff.
 	name = "User"
 	friend_notify = True
+	roundend_notify = True
 	autosync_frequency = 10 #minutes
 	autosync_index = 1
 	server_dict = 	{
@@ -291,6 +319,24 @@ class User_Data():
 		sound.playWAV_threaded('friend_log_in.wav')
 		most_recent_friends = [] #Since we just declared that they're online, they're not considered 'recent'.
 
+	def notify_roundend(self):
+		if self.roundend_notify is False: #Don't annoy the user if they don't want to see this one too.
+			return
+		msg = 'The round on ' + str(Server.address) + ':' + str(Server.port) + ' may have a vote to end the round soon.'
+		message(msg,libtcod.green)
+		balloon_tip('SS13 Server Monitor',msg)
+		sound.playWAV_threaded('friend_log_in.wav')
+		print 'Notifed of round ending.'
+
+	def notify_new_round(self):
+		if self.roundend_notify is False: #Don't annoy the user if they don't want to see this one too.
+			return
+		msg = 'There is a new round on ' + str(Server.address) + ':' + str(Server.port) + '.  The gamemode is ' + Server.gamemode + '.'
+		message(msg,libtcod.cyan)
+		balloon_tip('SS13 Server Monitor',msg)
+		sound.playWAV_threaded('friend_log_in.wav')
+		print 'Notifed of new round.'
+
 class Timer():
 	#Handles doing stuff every so often.
 	tick_total = 0
@@ -302,8 +348,12 @@ class Timer():
 	def interpolate_time(self):
 		if self.tick_total % (20) == 0: #one second
 			Server.count_time() #Make the estimated game time tick.
-		if self.tick_total % (User.autosync_frequency * 1200) == 0: #ten minutes by default
+		if self.tick_total % (User.autosync_frequency * 1200) == 0 and Server.reconnect is True: #ten minutes by default
 			Server.Export_threaded('status',True) #Resync with the server
+		#print 'Hour: ' + str(Server.hour) + '  Minute: ' + str(Server.minute)
+		if Server.hour >= 2 and Server.hour != 12 and Server.minute >= 50 and Server.alerted_end_of_round is False: #A dirty hack until I can figure out a futureproof'd way
+			User.notify_roundend()
+			Server.alerted_end_of_round = True
 
 def text_input():
 	timer = 0
@@ -529,6 +579,11 @@ def render_all():
 	else:
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 3, libtcod.BKGND_NONE, libtcod.RIGHT, 'Notify on friend log-in: Off')
 
+	if User.roundend_notify is True:
+		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 4, libtcod.BKGND_NONE, libtcod.RIGHT, 'Notify on estimated end of round: On')
+	else:
+		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 4, libtcod.BKGND_NONE, libtcod.RIGHT, 'Notify on estimated end of round: Off')
+
 	libtcod.console_set_default_background(log, libtcod.black)
 
 	#blit the contents of "status" to the root console
@@ -633,6 +688,13 @@ def handle_keys():
 				message('You will now be notified if a friend is seen.')
 			else:
 				message('You will no longer be notified if a friend is seen.')
+
+		if key_char == 'o':
+			User.roundend_notify = not User.roundend_notify
+			if User.roundend_notify:
+				message('You will now be notified when the round is about to end and when a new rounds starts.')
+			else:
+				message('You will no longer be notified when the round is about to end and when a new rounds starts.')
 
 		if key_char == '+':
 			if User.autosync_index != len(AUTOSYNC_OPTIONS) - 1: #Prevent out of bound errors.
