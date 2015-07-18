@@ -1,4 +1,4 @@
-#!/usr/bin/python
+
 #
 #
 
@@ -149,12 +149,15 @@ class Server_Data():
 
 			unconverted_hour = int(station_time[0]) #The server gives us the hour in 24 hour format.  We need to convert it to 12 hours.
 			old_hour = self.hour
+			self.hour = unconverted_hour
+			'''
 			if unconverted_hour >= 13:
 				self.hour = unconverted_hour - 12
 				print 'Time converted'
 			else:
 				self.hour = unconverted_hour
 				print 'Time not converted'
+			'''
 			self.minute = int(station_time[1]) #No nonsense needed for minutes.
 
 			#Now we try to guess if a new round started or not.
@@ -226,23 +229,38 @@ class Server_Data():
 		if self.minute >= 60:
 			self.hour += 1
 			self.minute = 0
-			if self.hour == 12:
-				self.is_PM = not self.is_PM
-		if self.hour >= 13:
-			self.hour = 1
+#			if self.hour == 12:
+#				self.is_PM = not self.is_PM
+#		if self.hour >= 13:
+#			self.hour = 1
+		if self.hour >= 24:
+			self.hour = 0
+		if self.hour >= 12:
+			self.is_PM = True
+		else:
+			self.is_PM = False
+
+		#Now we handle converting to 12h format, if that is what the user wants.
+		if User.convert_to_12_hours is True:
+			if self.hour >= 12:
+				converted_hour = self.hour - 12
+			else:
+				converted_hour = self.hour
+		else:
+			converted_hour = self.hour
 
 
 		#Now to add zeros for padding, if needed.
 		second_str = str(self.second)
 		minute_str = str(self.minute)
-		hour_str = str(self.hour)
+		hour_str = str(converted_hour)
 
 		if self.second <= 9:
 			second_str = '0' + str(self.second)
 		if self.minute <= 9:
 			minute_str = '0' + str(self.minute)
-		if self.hour <= 9:
-			hour_str = '0' + str(self.hour)
+		if converted_hour <= 9:
+			hour_str = '0' + str(converted_hour)
 
 		if self.is_PM is True:
 			AM_PM_str = 'PM'
@@ -275,6 +293,7 @@ class User_Data():
 	name = "User"
 	friend_notify = True
 	roundend_notify = True
+	convert_to_12_hours = True
 	autosync_frequency = 10 #minutes
 	autosync_index = 1
 	server_dict = 	{
@@ -402,7 +421,7 @@ def text_input():
 
 def message(new_msg, color = libtcod.white, timestamp = True, append = True, ):
 	if timestamp is True:
-		new_msg = str(time.strftime('[%I:%M:%S %p] ')) + str(new_msg)
+		new_msg = str(time.strftime('[%H:%M:%S %p] ')) + str(new_msg)
 	#split the message if necessary, among multiple lines
 	new_msg_lines = textwrap.wrap(new_msg, MSG_WIDTH)
 
@@ -564,11 +583,16 @@ def render_all():
 		libtcod.console_set_default_foreground(status, libtcod.red)
 		libtcod.console_print_ex(status, 8, 4, libtcod.BKGND_NONE, libtcod.LEFT, 'DISCONNECTED')
 	libtcod.console_set_default_foreground(status, libtcod.white)
-	libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 0, libtcod.BKGND_NONE, libtcod.RIGHT, 'Sys Time: ' + str(time.strftime('%I:%M:%S %p')))
-	if Server.failed_sync is False:
-		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 1, libtcod.BKGND_NONE, libtcod.RIGHT, 'Game Time: ' + str(Server.time))
+	if User.convert_to_12_hours is False:
+		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 0, libtcod.BKGND_NONE, libtcod.RIGHT, 'Sys Time: ' + str(time.strftime('%H:%M:%S %p')))
 	else:
-		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 1, libtcod.BKGND_NONE, libtcod.RIGHT, 'Game Time: ??:??:?? ??')
+		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 0, libtcod.BKGND_NONE, libtcod.RIGHT, 'Sys Time: ' + str(time.strftime('%I:%M:%S %p')))
+
+	if Server.failed_sync is False:
+		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 1, libtcod.BKGND_NONE, libtcod.RIGHT, 'Station Time: ' + str(Server.time))
+	else:
+		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 1, libtcod.BKGND_NONE, libtcod.RIGHT, 'Station Time: ??:??:?? ??')
+
 	if User.autosync_frequency % 60 == 0: #So we can display hours instead of minutes.
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 2, libtcod.BKGND_NONE, libtcod.RIGHT, 'Auto-sync interval: ' + str(User.autosync_frequency // 60) + 'h')
 	else:
@@ -709,6 +733,13 @@ def handle_keys():
 				User.autosync_frequency = AUTOSYNC_OPTIONS[User.autosync_index]
 			else:
 				message('Autosync cannot go any lower than ' + str(AUTOSYNC_OPTIONS[User.autosync_index]) + ' minutes.')
+
+		if key_char == 't':
+			User.convert_to_12_hours = not User.convert_to_12_hours
+			if User.convert_to_12_hours:
+				message('Your times will now be displayed in twelve hour format.')
+			else:
+				message('Your times will now be displayed in twenty four hour format.')
 
 
 
