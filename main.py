@@ -60,7 +60,6 @@ class Server_Data():
 	hour = 12
 	minute = 0
 	second = 0
-	is_PM = True
 	failed_sync = True
 	reconnect = True
 	reconnect_attempts = 3
@@ -94,7 +93,7 @@ class Server_Data():
 
 			print resp
 			resp = str(resp)
-			if msg == 'status':
+			if msg == 'status' or msg == 'status=2':
 				self.status = urlparse.parse_qs(resp, keep_blank_values=False, strict_parsing=False)
 				print self.status
 				self.update_vars()
@@ -144,39 +143,25 @@ class Server_Data():
 			message('Server failed to supply the gamemode.',libtcod.orange)
 
 		try: #/TG/ servers do not provide the station time or a list of players.
-			station_time = str(status['stationtime'][0])
+			station_time = str(status['roundduration'][0])
 			station_time = station_time.split(":") #Split the string into hours and minutes.
 
-			unconverted_hour = int(station_time[0]) #The server gives us the hour in 24 hour format.  We need to convert it to 12 hours.
-			old_hour = self.hour
-			self.hour = unconverted_hour
-			'''
-			if unconverted_hour >= 13:
-				self.hour = unconverted_hour - 12
-				print 'Time converted'
-			else:
-				self.hour = unconverted_hour
-				print 'Time not converted'
-			'''
-			self.minute = int(station_time[1]) #No nonsense needed for minutes.
+			old_hour = self.hour #Store the old hour before updating
+			self.hour = int(station_time[0])
+			new_round_hour = self.hour
+
+			self.minute = int(station_time[1])
 
 			#Now we try to guess if a new round started or not.
-			if self.hour == 12: #This is so we can simply check using less than, instead of converting to 24 h and back to 12 h.
-				new_round_hour = 0
-			else:
-				new_round_hour = self.hour
 
-			if old_hour == 12:
-				old_hour = 0
-
-			if new_round_hour < old_hour: #If this is true, it's likely that a new round started between syncs.
+			if new_round_hour < old_hour: #If round duration went from three hours to zero, it means we have a new round.
 				print 'New round assumed to be true.'
 				#message('A new round has started.',libtcod.cyan)
 				User.notify_new_round()
 				Server.alerted_end_of_round = False
 		except:
 			print 'Failed to get server time.'
-			message('Server failed to supply the station time.  The station time is inaccurate, and notifications for the end of round will not work.',libtcod.orange)
+			message('Server failed to supply the round duration.  The round duration is inaccurate, and notifications for the end of round will not work.',libtcod.orange)
 
 		try:
 			times_to_iterate = int(self.players_num)
@@ -229,16 +214,8 @@ class Server_Data():
 		if self.minute >= 60:
 			self.hour += 1
 			self.minute = 0
-#			if self.hour == 12:
-#				self.is_PM = not self.is_PM
-#		if self.hour >= 13:
-#			self.hour = 1
 		if self.hour >= 24:
 			self.hour = 0
-		if self.hour >= 12:
-			self.is_PM = True
-		else:
-			self.is_PM = False
 
 		#Now we handle converting to 12h format, if that is what the user wants.
 		if User.convert_to_12_hours is True:
@@ -262,13 +239,8 @@ class Server_Data():
 		if converted_hour <= 9:
 			hour_str = '0' + str(converted_hour)
 
-		if self.is_PM is True:
-			AM_PM_str = 'PM'
-		else:
-			AM_PM_str = 'AM'
-
 		#I don't expect rounds to literally last days, so we don't need to count higher.
-		self.time = str(hour_str) + ':' + str(minute_str) + ':' + str(second_str) + ' ' + str(AM_PM_str)
+		self.time = str(hour_str) + ':' + str(minute_str) + ':' + str(second_str)
 
 	def reload_address(self):
 		self.server = self.address,self.port
@@ -589,9 +561,9 @@ def render_all():
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 0, libtcod.BKGND_NONE, libtcod.RIGHT, 'Sys Time: ' + str(time.strftime('%I:%M:%S %p')))
 
 	if Server.failed_sync is False:
-		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 1, libtcod.BKGND_NONE, libtcod.RIGHT, 'Station Time: ' + str(Server.time))
+		libtcod.console_print_ex(status, SCREEN_WIDTH - 4, 1, libtcod.BKGND_NONE, libtcod.RIGHT, 'Round Duration: ' + str(Server.time))
 	else:
-		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 1, libtcod.BKGND_NONE, libtcod.RIGHT, 'Station Time: ??:??:?? ??')
+		libtcod.console_print_ex(status, SCREEN_WIDTH - 4, 1, libtcod.BKGND_NONE, libtcod.RIGHT, 'Round Duration: ??:??:??')
 
 	if User.autosync_frequency % 60 == 0: #So we can display hours instead of minutes.
 		libtcod.console_print_ex(status, SCREEN_WIDTH - 1, 2, libtcod.BKGND_NONE, libtcod.RIGHT, 'Auto-sync interval: ' + str(User.autosync_frequency // 60) + 'h')
