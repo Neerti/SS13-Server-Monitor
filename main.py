@@ -290,6 +290,7 @@ class User_Data():
 			else:
 				self.friends_list.append(ckey)
 				message(ckey + ' was added to your friends list.')
+			libtcod.console_clear(con)
 
 	def remove_friend(self, ckey):
 		if self.is_friend(ckey):
@@ -297,6 +298,7 @@ class User_Data():
 			message(ckey + ' was removed from your friends list.')
 		else:
 			message(ckey + ' was not on your friends list to begin with.')
+		libtcod.console_clear(con)
 
 	def notify_friends(self):
 		if self.friend_notify is False: #Don't annoy the user if they don't want to see/hear the notifications.
