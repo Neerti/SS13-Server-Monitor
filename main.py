@@ -176,11 +176,15 @@ class Server_Data():
 				target = 'player' + str(iterated)
 
 			self.update_seen_friends()
+			self.players.sort()
+			sort_friends_list()
 		except:
 			print 'Failed to retrieve list of players.'
 			message('Server failed to supply a list of players.  Friends list checking will be disabled.',libtcod.orange)
 		libtcod.console_clear(con)
 		message('Data synchronized with the server.',libtcod.grey)
+
+
 
 	def Export_threaded(self, msg, get_reply = True):
 		t = threading.Thread(target=self.Export,args=[msg, get_reply])
@@ -275,6 +279,7 @@ class User_Data():
 					}
 	current_server_dict_index = 0
 	friends_list = []
+	sorted_friends_list = []
 	seen_friends = []
 	most_recent_friends = []
 
@@ -285,12 +290,15 @@ class User_Data():
 
 	def add_friend(self, ckey):
 		if ckey:
+			if ckey == "":
+				return
 			if self.is_friend(ckey):
 				message(ckey + ' is already on your friends list.')
 			else:
 				self.friends_list.append(ckey)
 				message(ckey + ' was added to your friends list.')
 			libtcod.console_clear(con)
+			sort_friends_list()
 
 	def remove_friend(self, ckey):
 		if self.is_friend(ckey):
@@ -299,6 +307,7 @@ class User_Data():
 		else:
 			message(ckey + ' was not on your friends list to begin with.')
 		libtcod.console_clear(con)
+		sort_friends_list()
 
 	def notify_friends(self):
 		if self.friend_notify is False: #Don't annoy the user if they don't want to see/hear the notifications.
@@ -478,7 +487,7 @@ def render_all():
 		size_of_column += 1
 	size_of_columns = 0
 
-	for friend in User.friends_list:
+	for friend in User.sorted_friends_list:
 		color = libtcod.grey
 		if Server.is_player_online(friend): #If the user's friend is online, highlight them in green.
 			color = libtcod.green
@@ -724,6 +733,29 @@ def balloon_tip(title='Beep', msg='Boop'):
 		return
 	else:
 		balloontip.WindowsBalloonTip(title, msg)
+
+def sort_friends_list():
+	half_sorted_friends_list = []
+	half_sorted_friends_list = sorted(User.friends_list)
+	User.sorted_friends_list = []
+	online_friends = []
+	offline_friends = []
+	for ckey in half_sorted_friends_list:
+		if Server.is_player_online(ckey):
+			online_friends.append(ckey)
+		else:
+			offline_friends.append(ckey)
+
+	User.sorted_friends_list = online_friends + offline_friends
+
+#	print "Sorted friends"
+#	print(User.sorted_friends_list)
+#	print "Unsorted friends"
+#	print(User.friends_list)
+#	print "Online friends"
+#	print(online_friends)
+#	print "Offline friends"
+#	print(offline_friends)
 
 def save_config():
 	#open a new empty shelve (possibly overwriting an old one) to write the config data
